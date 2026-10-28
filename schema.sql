@@ -18,8 +18,8 @@ CREATE TABLE Books (
     Format          TEXT    NOT NULL
                     CHECK (Format IN ('Hardback','Paperback','Audio book','E-book')),
     PublicationYear INTEGER NOT NULL
-                    CHECK (PublicationYear > 0
-                           AND PublicationYear <= CAST(strftime('%Y','now') AS INTEGER)),
+                    CHECK (PublicationYear > 0),   -- "not in the future" is enforced by a trigger below
+                                                     -- (SQLite CHECK constraints must be deterministic)
     CallNumber      TEXT    NOT NULL UNIQUE,
     NumberOfCopies  INTEGER NOT NULL DEFAULT 1
                     CHECK (NumberOfCopies >= 0)
@@ -70,6 +70,16 @@ CREATE INDEX idx_transactions_member ON Transactions(MemberID);
 -- The rules below are "cross-row" rules (they depend on OTHER
 -- rows), which SQLite can only express with triggers.
 -- ============================================================
+
+-- Rule: a book's publication year cannot be in the future.
+-- (Expressed as a trigger, not a CHECK, because strftime('now') is
+-- non-deterministic and SQLite CHECK constraints must be deterministic.)
+CREATE TRIGGER trg_book_year_not_future
+BEFORE INSERT ON Books
+BEGIN
+    SELECT RAISE(ABORT, 'PublicationYear cannot be in the future')
+    WHERE NEW.PublicationYear > CAST(strftime('%Y','now') AS INTEGER);
+END;
 
 -- Rule: a member whose account is not Active may not check out a book.
 CREATE TRIGGER trg_member_must_be_active
